@@ -10,6 +10,9 @@ const load = n => {
   try { const d = localStorage.getItem("mad_content_" + n); if (d) return Promise.resolve(JSON.parse(d)); } catch {}
   return fetch(`content/${n}.json`).then(r => { if (!r.ok) throw new Error(n); return r.json(); });
 };
+const draftKeys = () => { try { return Object.keys(localStorage).filter(k => k.startsWith("mad_content_")); } catch { return []; } };
+// Photo paths from the CMS may be root-absolute (/photos/x.jpg); pages live at the site root, so make them relative.
+const photoSrc = p => /^(data:|https?:|\/\/)/i.test(p) ? p : String(p).replace(/^\/+/, "");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const page = document.body.dataset.page;
 const semYear = s => (s.match(/^\d\d-\d\d/) || [""])[0];
@@ -17,7 +20,8 @@ const semYear = s => (s.match(/^\d\d-\d\d/) || [""])[0];
 root.classList.add("js");
 try { root.dataset.skin = new URLSearchParams(location.search).get("skin") || localStorage.getItem("skin") || "night"; } catch { root.dataset.skin = "night"; }
 
-function shell(site) {
+function shell(site, events) {
+  const years = [...new Set(events.map(e => semYear(e.semester)).filter(Boolean))].sort().reverse();
   const cur = location.pathname.split("/").pop() || "index.html";
   document.body.insertAdjacentHTML("afterbegin", `<a class="skip" href="#main">Skip to content</a><div class="progress" id="progress"></div>
 <header class="nav"><div class="wrap"><a class="brand" href="index.html">${esc(site.name)}<small>${esc(site.college_short)}</small></a>
@@ -27,8 +31,13 @@ function shell(site) {
 <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="links">Menu</button></div></header>`);
   document.body.insertAdjacentHTML("beforeend", `<footer><div class="wrap"><div class="cols"><div><p class="foot-brand">${esc(site.full_name)}</p><p>${esc(site.college)} (${esc(site.college_short)}). Est. ${esc(site.established)}.</p><p><a href="${esc(site.instagram)}">${esc(site.instagram_handle)} on Instagram</a></p></div>
 <ul><li><b>Explore</b></li>${NAV.map(([h,t])=>`<li><a href="${h}">${t}</a></li>`).join("")}</ul>
-<ul><li><b>Event archives</b></li><li><a href="events.html?y=25-26">2025-26</a></li><li><a href="events.html?y=24-25">2024-25</a></li><li><a href="events.html?y=23-24">2023-24</a></li></ul></div>
-<p class="legal">&copy; ${new Date().getFullYear()} ${esc(site.full_name)}, ${esc(site.college_short)} &middot; <a href="admin/">Admin</a></p></div></footer>`);
+<ul><li><b>Event archives</b></li>${years.map(y => `<li><a href="events.html?y=${esc(y)}">20${y.replace("-", "-20")}</a></li>`).join("")}</ul></div>
+<p class="legal">&copy; ${new Date().getFullYear()} ${esc(site.full_name)}, ${esc(site.college_short)}</p></div></footer>`);
+  const dk = draftKeys().map(k => k.slice(12));
+  if (dk.length) {
+    document.body.insertAdjacentHTML("afterbegin", `<div class="draft-banner" role="status">You are viewing unpublished drafts from the admin editor in this browser: ${esc(dk.join(", "))}. <button type="button" id="discard-drafts">Discard drafts</button> <a href="admin/">Open editor</a></div>`);
+    $("#discard-drafts").onclick = () => { draftKeys().forEach(k => { try { localStorage.removeItem(k); } catch {} }); location.reload(); };
+  }
   const links = $("#links"), burger = $("#burger");
   const setMenu = o => { links.classList.toggle("open", o); burger.setAttribute("aria-expanded", o); };
   burger.onclick = () => setMenu(!links.classList.contains("open"));
@@ -85,8 +94,8 @@ const pages = {
   async events() {
     const { events } = await load("events");
     const years = [...new Set(events.map(e => semYear(e.semester)))].sort().reverse();
-    const qp = new URLSearchParams(location.search);
-    window.__ev = { events, y: qp.get("y") || "all", q: "" };
+    const qp = new URLSearchParams(location.search), y0 = qp.get("y");
+    window.__ev = { events, y: years.includes(y0) ? y0 : "all", q: "" };
     return head("Events", "Everything we have run.", "Search every event, newest first. Open one for its photos.") +
       `<div class="wrap tools"><label class="search"><span class="sr">Search events</span><input id="q" type="search" placeholder="Search events, e.g. hack, UI, git" autocomplete="off"></label>
 <div class="chips" id="chips"><button class="chip" data-y="all">All</button>${years.map(y => `<button class="chip" data-y="${y}">20${y.replace("-", "-20")}</button>`).join("")}</div><p class="count" id="count" aria-live="polite"></p></div>
@@ -99,7 +108,7 @@ const pages = {
     if (!e) { document.title = "Event not found | MAD Club"; return head("Events", "Event not found") + `<div class="wrap"><a class="btn" href="events.html">All events</a></div>`; }
     document.title = `${e.name} | MAD Club`;
     const ph = e.photos || [];
-    return head(e.semester, e.name, e.description) + `<div class="wrap">${ph.length ? `<div class="gallery">${ph.map((p, i) => `<button type="button" class="shot" data-src="${esc(p)}"><img loading="lazy" decoding="async" src="${esc(p)}" alt="${esc(e.name)}, photo ${i + 1}"></button>`).join("")}</div>` : `<div class="empty">No photos yet. Add them in the admin panel under Events.</div>`}
+    return head(e.semester, e.name, e.description) + `<div class="wrap">${ph.length ? `<div class="gallery">${ph.map((p, i) => `<button type="button" class="shot" data-src="${esc(photoSrc(p))}"><img loading="lazy" decoding="async" src="${esc(photoSrc(p))}" alt="${esc(e.name)}, photo ${i + 1}"></button>`).join("")}</div>` : `<div class="empty">No photos yet. Add them in the admin panel under Events.</div>`}
 <p class="back"><a class="btn" href="events.html">All events</a></p></div><dialog id="lb"><img alt=""><form method="dialog"><button class="btn">Close</button></form></dialog>`;
   },
 
@@ -160,8 +169,7 @@ function wirePalette(site, events) {
     ...NAV.map(([h, t]) => ({ g: "Page", t, run: () => { location.href = h; } })),
     ...events.map(e => ({ g: "Event", t: e.name, s: e.semester, run: () => { location.href = "event.html?e=" + encodeURIComponent(e.slug); } })),
     ...SKINS.map(([k, t]) => ({ g: "Style", t: t + " style", run: () => setSkin(k) })),
-    { g: "Link", t: "Instagram " + site.instagram_handle, run: () => open(site.instagram, "_blank") },
-    { g: "Link", t: "Open admin", run: () => { location.href = "admin/"; } }
+    { g: "Link", t: "Instagram " + site.instagram_handle, run: () => open(site.instagram, "_blank", "noopener") }
   ];
   const q = $("#pal-q", d), l = $("#pal-l", d);
   let sel = 0, shown = [];
@@ -210,6 +218,54 @@ function wireMotion() {
   document.addEventListener("pointerleave", () => dot.classList.remove("on"));
   (function loop() { x += (tx - x) * .2; y += (ty - y) * .2; dot.style.transform = `translate(${x}px,${y}px)`; requestAnimationFrame(loop); })();
 }
+// Hero "swarm": named agent cursors that pick page elements, box them, and move on (like a live multiplayer edit).
+function wireSwarm() {
+  const hero = $(".hero");
+  if (!hero || reduced) return;
+  const layer = document.createElement("div");
+  layer.className = "swarm"; layer.setAttribute("aria-hidden", "true");
+  hero.prepend(layer);
+  const roster = [["Design", "#c6ff3d"], ["Flutter", "#4cc9f0"], ["Copy", "#ff7ad9"], ["QA", "#ffb703"], ["Deploy", "#a78bfa"]];
+  const agents = roster.slice(0, innerWidth < 700 ? 3 : 5).map(([name, color]) => {
+    const el = document.createElement("div");
+    el.className = "agent"; el.style.setProperty("--c", color);
+    el.innerHTML = `<i class="box"></i><span class="cur"><svg viewBox="0 0 16 20" width="16" height="20"><path d="M1 1l13 7-6 2-2 7z" fill="currentColor" stroke="#000" stroke-width="1"/></svg><b>${name}</b></span>`;
+    layer.append(el);
+    return el;
+  });
+  const targets = () => $$(".hero h1, .hero .tagline, .hero .lead, .hero .btn, .hero .phone", hero);
+  const place = el => {
+    const ts = targets(); if (!ts.length) return;
+    const t = ts[Math.floor(Math.random() * ts.length)], h = hero.getBoundingClientRect(), r = t.getBoundingClientRect();
+    const pad = 6, x = r.left - h.left - pad, y = r.top - h.top - pad, w = r.width + pad * 2, ht = r.height + pad * 2;
+    el.style.setProperty("--x", x + "px"); el.style.setProperty("--y", y + "px");
+    el.style.setProperty("--w", w + "px"); el.style.setProperty("--h", ht + "px");
+    const cx = x + w * (.45 + Math.random() * .55), cy = y + ht * (.55 + Math.random() * .45);
+    el.style.setProperty("--cx", cx + "px"); el.style.setProperty("--cy", cy + "px");
+  };
+  let live = true;
+  new IntersectionObserver(es => { live = es[0].isIntersecting; }).observe(hero);
+  agents.forEach((el, i) => {
+    place(el);
+    el.classList.add("on");
+    const step = () => { if (live && !document.hidden) place(el); setTimeout(step, 2200 + Math.random() * 2600); };
+    setTimeout(step, 900 + i * 450);
+  });
+}
+// Floating dock: quick nav, search and style, always reachable (important on phones).
+function wireDock(site) {
+  const cur = location.pathname.split("/").pop() || "index.html";
+  const quick = [["index.html", "Home"], ["events.html", "Events"], ["team.html", "Team"], ["contact.html", "Join"]];
+  const d = document.createElement("nav");
+  d.className = "dock"; d.setAttribute("aria-label", "Quick navigation");
+  d.innerHTML = quick.map(([h, t]) => `<a href="${h}"${h === cur ? ' aria-current="page"' : ""}>${t}</a>`).join("") +
+    `<span class="sep"></span><button type="button" id="dock-s" aria-label="Open command menu">Search</button><button type="button" id="dock-k" aria-label="Change site style">Style</button>`;
+  document.body.append(d);
+  $("#dock-s").onclick = () => $("#open-pal").click();
+  $("#dock-k").onclick = () => { const k = SKINS.map(s => s[0]); setSkin(k[(k.indexOf(root.dataset.skin) + 1) % k.length]); };
+  let last = scrollY;
+  addEventListener("scroll", () => { const y = scrollY; d.classList.toggle("tuck", y > last + 6 && y > 400); if (Math.abs(y - last) > 6) last = y; }, {passive:true});
+}
 function wirePhone() {
   const li = $$(".s-list li");
   if (!li.length) return;
@@ -256,18 +312,20 @@ function wireTeam() {
 (async () => {
   const main = $("#main");
   try {
-    const site = await load("site");
-    shell(site);
+    const site = await load("site"), evs = (await load("events")).events;
+    shell(site, evs);
     main.innerHTML = await pages[page](site);
     if (page !== "event" && page !== "events") document.title = (page === "home" ? "" : $("h1", main)?.textContent.replace(/\.$/, "") + " | ") + site.name + " | " + site.college_short;
     main.addEventListener("click", e => {
       const b = e.target.closest(".shot"); if (!b) return;
       const d = $("#lb"); $("img", d).src = b.dataset.src; d.showModal();
     });
-    const evs = (await load("events")).events;
-    wirePalette(site, evs); wireMotion(); wirePhone(); wireEvents(); wireTeam();
+    wirePalette(site, evs); wireMotion(); wirePhone(); wireEvents(); wireTeam(); wireSwarm(); wireDock(site);
     activate();
   } catch (err) {
-    main.innerHTML = `<div class="wrap page-head"><h1>Could not load content</h1><p class="lead">Open the site through a web server (not by double-clicking the file) so it can read the content folder.</p></div>`;
+    const local = location.protocol === "file:", dk = draftKeys().length;
+    main.innerHTML = `<div class="wrap page-head"><h1>Could not load content</h1><p class="lead">${local ? "Open the site through a web server (not by double-clicking the file) so it can read the content folder." : "Something went wrong while loading the site content."}</p>${local ? "" : `<p><button class="btn primary" type="button" id="retry">Retry</button>${dk ? ` <button class="btn" type="button" id="discard-drafts">Discard drafts</button>` : ""}</p>`}</div>`;
+    $("#retry")?.addEventListener("click", () => location.reload());
+    $("#discard-drafts")?.addEventListener("click", () => { draftKeys().forEach(k => { try { localStorage.removeItem(k); } catch {} }); location.reload(); });
   }
 })();
