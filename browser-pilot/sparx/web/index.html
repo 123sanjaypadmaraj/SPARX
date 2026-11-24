@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060b12">
+<meta name="color-scheme" content="dark light">
+<title>Sparx</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/style.css">
+<script src="/orb.js" defer></script>
+<script src="/app.js" defer></script>
+</head>
+<body data-state="offline" data-view="chat">
+
+<noscript><p class="noscript">Sparx's interface needs JavaScript. Everything is served from your own computer.</p></noscript>
+
+<!-- sign-in / PIN -->
+<div id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <svg class="gate-mark" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="ring r1" cx="100" cy="100" r="92"/>
+      <circle class="ring r2" cx="100" cy="100" r="76"/>
+      <circle class="core-dot" cx="100" cy="100" r="26"/>
+    </svg>
+    <h1>Sparx</h1>
+    <form id="login-form" hidden>
+      <p>Open the one-time link printed by <code>sparx serve</code>, or paste your access token.</p>
+      <label for="login-token">Access token</label>
+      <input id="login-token" type="password" autocomplete="current-password" required>
+      <button class="btn primary" type="submit">Sign in</button>
+    </form>
+    <form id="pin-form" hidden>
+      <p>This session is locked.</p>
+      <label for="pin-input">PIN</label>
+      <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" required>
+      <button class="btn primary" type="submit">Unlock</button>
+      <button class="btn ghost" type="button" id="pin-logout">Sign out</button>
+    </form>
+    <p id="gate-msg" class="gate-msg" role="alert"></p>
+  </div>
+</div>
+
+<div id="app" class="app" hidden>
+  <header class="top">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="ring r2" cx="100" cy="100" r="80"/>
+        <circle class="core-dot" cx="100" cy="100" r="34"/>
+      </svg>
+      <span id="brand-name">Sparx</span>
+      <span id="link" class="chip" title="Connection to Sparx">offline</span>
+    </div>
+    <div class="top-meta">
+      <span id="model" class="chip dim" title="Model in use"></span>
+      <label class="scope" title="Memory scope: which memories Sparx uses and writes">
+        <span class="sr">Memory scope</span>
+        <select id="scope"></select>
+      </label>
+      <label class="scope">
+        <span class="sr">Name for the new memory scope</span>
+        <input id="scope-new" type="text" maxlength="40" placeholder="New scope name, then Enter" autocomplete="off" hidden>
+      </label>
+    </div>
+    <button id="stop" class="stop" type="button" title="Emergency stop: halts everything Sparx is doing">
+      <span class="stop-icon" aria-hidden="true"></span><span id="stop-label">Stop</span>
+    </button>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <button data-nav="chat" class="on">Sparx</button>
+    <button data-nav="systems" class="narrow-only">Systems</button>
+    <button data-nav="today">Today</button>
+    <button data-nav="tasks">Tasks</button>
+    <button data-nav="memory">Memory</button>
+    <button data-nav="alerts">Alerts <span id="unread" class="badge" hidden></span></button>
+    <button data-nav="pending">Approvals <span id="pending-count" class="badge" hidden></span></button>
+    <button data-nav="automations">Automations <span id="automations-count" class="badge" hidden></span></button>
+    <button data-nav="history">History</button>
+    <button data-nav="activity">Activity</button>
+    <button data-nav="undo">Undo</button>
+    <button data-nav="usage">Usage</button>
+    <button data-nav="settings">Settings</button>
+  </nav>
+
+  <main>
+    <!-- chat + HUD -->
+    <section class="view" data-view="chat">
+      <div class="hud">
+        <button id="core" class="core" type="button" title="Tap to interrupt speech. Drag to spin."><canvas id="orb" aria-hidden="true"></canvas></button>
+        <div class="hud-text">
+          <div id="state-label" class="state-label">OFFLINE</div>
+          <p id="greeting" class="greeting"></p>
+          <div id="activity" class="activity" aria-live="polite"></div>
+          <p id="caption" class="caption" aria-live="polite"></p>
+        </div>
+        <button id="orb-toggle" class="btn ghost small orb-toggle" type="button" aria-pressed="false" title="Fill the screen with the orb">Orb mode</button>
+      </div>
+
+      <div id="protocols" class="protocols" aria-label="Protocols" hidden></div>
+
+      <div id="log" class="log" aria-live="polite"></div>
+
+      <form id="composer" class="composer">
+        <div id="voice-row" class="voice-row" hidden>
+          <button id="handsfree" class="btn ghost small" type="button" aria-pressed="false">Hands-free: off</button>
+          <label class="sr" for="voice-lang">Voice language</label>
+          <select id="voice-lang" class="small">
+            <option value="en-IN">English</option>
+            <option value="hi-IN">हिन्दी</option>
+            <option value="kn-IN">ಕನ್ನಡ</option>
+          </select>
+          <button id="speak-toggle" class="btn ghost small" type="button" aria-pressed="false" hidden>Speak replies: off</button>
+        </div>
+        <div class="composer-row">
+          <label class="icon-btn" title="Upload a file for Sparx to read">
+            <span class="sr">Upload a file</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v10a4.5 4.5 0 0 1-9 0V6a3 3 0 0 1 6 0v9.5a1.5 1.5 0 0 1-3 0V7"/></svg>
+            <input id="file" type="file" hidden>
+          </label>
+          <textarea id="input" rows="1" placeholder="Ask Sparx…" autocomplete="off" enterkeyhint="send"></textarea>
+          <button id="mic" class="icon-btn" type="button" title="Hold to talk" hidden>
+            <span class="sr">Hold to talk</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+          </button>
+          <button id="send" class="btn primary" type="submit">Send</button>
+          <button id="cancel" class="btn" type="button" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="view panel" data-view="today"><h2>Today</h2><div id="today-body" class="panel-body"></div></section>
+
+    <section class="view panel" data-view="tasks">
+      <div class="panel-head">
+        <h2>Tasks and trackers</h2>
+        <select id="dash-kind" aria-label="What to show">
+          <option value="tasks">Tasks</option><option value="reminders">Reminders</option>
+          <option value="events">Calendar</option><option value="habits">Habits</option>
+          <option value="goals">Goals</option><option value="expenses">Expenses</option>
+        </select>
+        <label class="check"><input id="dash-open" type="checkbox" checked> Open only</label>
+      </div>
+      <div id="tasks-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="memory">
+      <div class="panel-head">
+        <h2>Memory</h2>
+        <label class="check"><input id="memory-all" type="checkbox"> All scopes</label>
+      </div>
+      <p class="hint">What Sparx remembers about you. Correct or delete anything here.</p>
+      <div id="memory-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="alerts">
+      <div class="panel-head">
+        <h2>Notifications</h2>
+        <button id="alerts-read" class="btn ghost small" type="button">Mark all read</button>
+      </div>
+      <div id="alerts-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="pending"><h2>Approvals</h2><div id="pending-body" class="panel-body"></div></section>
+
+    <section class="view panel" data-view="automations">
+      <h2>Automations</h2>
+      <p class="hint">Saved recipes and their runs. A run that reached a step it may not do on its own waits here for you.</p>
+      <div id="automations-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="history">
+      <div class="panel-head">
+        <h2>Conversations</h2>
+        <button id="conv-new" class="btn small" type="button">New conversation</button>
+      </div>
+      <p class="hint">Conversations live on your computer, so every device you sign in on sees the same ones.</p>
+      <div id="history-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="activity">
+      <h2>Activity</h2>
+      <p class="hint">Every tool Sparx ran, newest first. Credentials are masked before they are logged.</p>
+      <div id="activity-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="undo">
+      <h2>Undo</h2>
+      <p class="hint">Reversible actions Sparx took.</p>
+      <div id="undo-body" class="panel-body"></div>
+    </section>
+
+    <section class="view panel" data-view="usage"><h2>Usage</h2><div id="usage-body" class="panel-body"></div></section>
+
+    <section class="view panel" data-view="settings"><h2>Settings</h2><div id="settings-body" class="panel-body"></div></section>
+  </main>
+
+  <!-- Systems: always visible on wide screens, its own tab on phones -->
+  <aside class="systems" aria-label="Systems">
+    <h2>Systems</h2>
+    <div id="vitals" class="vitals"></div>
+    <h3>Sparx</h3>
+    <dl id="sys-sparx" class="kv"></dl>
+    <h3>Tool groups</h3>
+    <div id="groups" class="groups"></div>
+  </aside>
+</div>
+
+<div id="toasts" class="toasts" aria-live="assertive"></div>
+</body>
+</html>

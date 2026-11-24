@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "browser-pilot"
+version = "0.2.0"
+description = "LLM-agnostic, multi-agent browser automation for your real Chrome, plus Sparx, a personal AI assistant"
+requires-python = ">=3.10"
+dependencies = ["playwright>=1.45", "openai>=1.40", "httpx>=0.27", "fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+docs = ["python-docx", "python-pptx", "openpyxl", "pypdf", "fpdf2"]
+voice = ["faster-whisper", "edge-tts", "pyttsx3", "sounddevice"]
+vision = ["opencv-python", "mss", "pyautogui", "pytesseract"]
+home = ["paho-mqtt"]
+all = ["browser-pilot[docs,voice,vision,home]"]
+
+[project.scripts]
+pilot = "browserpilot.cli:main"
+sparx = "sparx.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["browserpilot*", "sparx*"]
+
+[tool.setuptools.package-data]
+sparx = ["web/*", "web/**/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-m \"not ollama\""
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["browser: drives the web HUD in a real headless browser (slow); leave out with -m 'not browser'",
+           "ollama: live checks against local Ollama models (OLLAMA_TEST_MODELS); run with -m ollama",
+           "network: may open real non-loopback connections (none today)"]
